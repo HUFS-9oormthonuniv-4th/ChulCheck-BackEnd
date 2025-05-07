@@ -1,4 +1,4 @@
-package com.likelion13th.Welcomekit_BE.config;
+package goormthon.hufs.chulcheck.config;
 
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
