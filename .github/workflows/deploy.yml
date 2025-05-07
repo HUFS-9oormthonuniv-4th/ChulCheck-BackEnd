@@ -12,75 +12,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          submodules: false  # 서브모듈 제거
-
-      # 1. Java 17 세팅
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'zulu'
 
-      # 2. application.yml 생성
-      - name: create application.yml file
+      - name: create application.properties file
         run: |
+          mkdir ./src/main/resources
           touch ./src/main/resources/application.yml
-          echo "${{ secrets.APPLICATION_YML }}" > src/main/resources/application.yml
+          echo "${{ secrets.APPLICATION_YML }}" >> src/main/resources/application.yml
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
+        shell: bash
 
-      # 3. 프론트엔드 빌드 (오류 방지 포함)
-      - name: Clean npm cache and reinstall dependencies
-        run: |
-          cd src/main/frontend
-          rm -rf node_modules package-lock.json
-          npm cache clean --force
-          npm install
-
-      - name: Check installed dependencies
-        run: |
-          cd src/main/frontend
-          npm list react-scripts
-
-      - name: Install react-scripts if missing
-        run: |
-          cd src/main/frontend
-          npm install react-scripts --save
-
-      - name: Build Frontend
-        run: |
-          cd src/main/frontend
-          CI=false npm run build
-
-      - name: Copy Frontend Build to Static Folder
-        run: |
-          rm -rf src/main/resources/static
-          mkdir -p src/main/resources/static
-          cp -r src/main/frontend/build/* src/main/resources/static/
-
-      # 4. Spring Boot 애플리케이션 빌드
+      # 2. Spring Boot 애플리케이션 빌드
       - name: Build with Gradle
-        uses: gradle/gradle-build-action@v3
+        uses: gradle/gradle-build-action@67421db6bd0bf253fb4bd25b31ebb98943c375e1
         with:
           arguments: clean bootJar
 
-      # 5. Docker 이미지 빌드
+      # 3. Docker 이미지 빌드
       - name: docker image build
-        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/welcomekit_be .
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/chulcheck .
 
-      # 6. DockerHub 로그인
+      # 4. DockerHub 로그인
       - name: docker login
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      # 7. Docker Hub 이미지 푸시
+      # 5. Docker Hub 이미지 푸시
       - name: docker Hub push
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/welcomekit_be
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/chulcheck
 
   run-docker-image-on-ec2:
     needs: build-docker-image
@@ -88,19 +55,16 @@ jobs:
 
     steps:
       - name: docker pull
-        run: sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/welcomekit_be
+        run: sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/chulcheck
 
       - name: docker stop container
         run: |
-          if [ $(sudo docker ps -q -f name=welcomekit_be) ]; then
-            sudo docker stop welcomekit_be
-            sudo docker rm -f welcomekit_be
+          if [ $(sudo docker ps -q -f name=chulcheck) ]; then
+            sudo docker stop chulcheck
           fi
 
       - name: docker run new container
-        run: |
-          sudo docker run -v /home/ec2-user/profile:/app/external-profile --name welcomekit_be --rm -d -p 8080:8080 \
-          ${{ secrets.DOCKERHUB_USERNAME }}/welcomekit_be
+        run: sudo docker run --name chulcheck --rm -d -p 8080:8080 ${{ secrets.DOCKERHUB_USERNAME }}/chulcheck
 
       - name: delete old docker image
         run: sudo docker system prune -f
