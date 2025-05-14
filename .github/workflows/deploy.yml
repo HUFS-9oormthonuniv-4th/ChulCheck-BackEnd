@@ -23,6 +23,12 @@ jobs:
           mkdir ./src/main/resources
           touch ./src/main/resources/application.yml
           echo "${{ secrets.APPLICATION_YML }}" >> src/main/resources/application.yml
+          touch ./src/main/resources/application.yml
+          echo "${{ secrets.APPLICATION_JWT_YML }}" >> src/main/resources/application-jwt.yml
+          touch ./src/main/resources/application.yml
+          echo "${{ secrets.APPLICATION_MYSQL_YML }}" >> src/main/resources/application-mysql.yml
+          touch ./src/main/resources/application.yml
+          echo "${{ secrets.APPLICATION_OAUTH_YML }}" >> src/main/resources/application-oauth.yml
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
