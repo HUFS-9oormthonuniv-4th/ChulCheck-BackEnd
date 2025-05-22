@@ -3,6 +3,7 @@ package goormthon.hufs.chulcheck.controller;
 import goormthon.hufs.chulcheck.domain.dto.CustomOAuth2User;
 import goormthon.hufs.chulcheck.domain.dto.request.CreateAttendenceRequest;
 import goormthon.hufs.chulcheck.domain.dto.response.GetAttendanceResponse;
+import goormthon.hufs.chulcheck.domain.dto.response.GetAttendanceStatsResponse;
 import goormthon.hufs.chulcheck.service.AttendanceService;
 import java.util.List;
 import lombok.Getter;
@@ -33,5 +34,13 @@ public class AttendenceController {
         CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
         String userId = customOAuth2User.getUserId();
         return attendanceService.getAllAttendancesByUserAndClub(userId, clubId);
+    }
+
+    @GetMapping("/attendence/stats")
+    public GetAttendanceStatsResponse getAttendenceStats(Authentication authentication,
+                                                         @RequestParam Long clubId) {
+        CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+        String userId = customOAuth2User.getUserId();
+        return attendanceService.getAttendanceStatsByUserAndClub(userId, clubId);
     }
 }

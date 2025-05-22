@@ -1,6 +1,7 @@
 package goormthon.hufs.chulcheck.service;
 
 import goormthon.hufs.chulcheck.domain.dto.response.GetAttendanceResponse;
+import goormthon.hufs.chulcheck.domain.dto.response.GetAttendanceStatsResponse;
 import goormthon.hufs.chulcheck.domain.entity.Attendance;
 import goormthon.hufs.chulcheck.domain.entity.AttendanceSession;
 import goormthon.hufs.chulcheck.domain.entity.User;
@@ -63,6 +64,26 @@ public class AttendanceService {
         userRepository.findByUserId(userId);
         List<Attendance> attendances = attendanceRepository.findAllByUserUserIdAndAttendanceSessionClubId(userId, clubId);
         return GetAttendanceResponse.fromEntity(attendances);
+    }
+
+    public GetAttendanceStatsResponse getAttendanceStatsByUserAndClub(String userId, Long clubId) {
+        userRepository.findByUserId(userId);
+
+        List<Attendance> attendances =
+                attendanceRepository.findAllByUserUserIdAndAttendanceSessionClubId(userId, clubId);
+
+        long total = attendances.size();
+        long present = attendances.stream()
+                .filter(a -> a.getStatus() == AttendanceStatus.PRESENT)
+                .count();
+        long late = attendances.stream()
+                .filter(a -> a.getStatus() == AttendanceStatus.LATE)
+                .count();
+        long absent = attendances.stream()
+                .filter(a -> a.getStatus() == AttendanceStatus.ABSENT)
+                .count();
+
+        return new GetAttendanceStatsResponse(total, present, late, absent);
     }
 
     @Transactional
