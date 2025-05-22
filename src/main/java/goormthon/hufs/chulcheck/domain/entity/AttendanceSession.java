@@ -33,7 +33,7 @@ public class AttendanceSession {
 	private String place;
 	private Time startTime;
 	private Time endTime;
-	private LocalDateTime sessionDate;
+	private LocalDateTime sessionDateTime;
 
 	private String attendanceCode;
 

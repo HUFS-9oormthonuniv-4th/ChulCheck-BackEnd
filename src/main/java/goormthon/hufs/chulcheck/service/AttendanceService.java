@@ -1,5 +1,6 @@
 package goormthon.hufs.chulcheck.service;
 
+import goormthon.hufs.chulcheck.domain.dto.response.GetAttendanceResponse;
 import goormthon.hufs.chulcheck.domain.entity.Attendance;
 import goormthon.hufs.chulcheck.domain.entity.AttendanceSession;
 import goormthon.hufs.chulcheck.domain.entity.User;
@@ -58,6 +59,12 @@ public class AttendanceService {
         return attendanceRepository.findAll();
     }
 
+    public List<GetAttendanceResponse> getAllAttendancesByUserAndClub(String userId, Long clubId) {
+        userRepository.findByUserId(userId);
+        List<Attendance> attendances = attendanceRepository.findAllByUserUserIdAndAttendanceSessionClubId(userId, clubId);
+        return GetAttendanceResponse.fromEntity(attendances);
+    }
+
     @Transactional
     public Attendance updateAttendance(Long id) {
         Attendance attendance = getAttendance(id);
@@ -79,11 +86,22 @@ public class AttendanceService {
      */
     private void applyStatusAndTime(Attendance attendance, AttendanceSession session) {
         LocalDateTime now = LocalDateTime.now();
-        LocalDate sessionDatePart = session.getSessionDate().toLocalDate();
+        LocalDate sessionDatePart = session.getSessionDateTime().toLocalDate();
         LocalTime startLocalTime = session.getStartTime().toLocalTime();
+        LocalTime endLocalTime = session.getEndTime().toLocalTime();
         LocalDateTime sessionStart = LocalDateTime.of(sessionDatePart, startLocalTime);
-        AttendanceStatus status = (now.isBefore(sessionStart) || now.isEqual(sessionStart))
-            ? AttendanceStatus.PRESENT : AttendanceStatus.LATE;
+        LocalDateTime sessionEnd = LocalDateTime.of(sessionDatePart, endLocalTime);
+
+        if (now.isAfter(sessionEnd)) {
+            throw new IllegalStateException("출석 가능 시간이 지났습니다. 마감: " + sessionEnd);
+        }
+
+        AttendanceStatus status;
+        if (now.isBefore(sessionStart) || now.isEqual(sessionStart)) {
+            status = AttendanceStatus.PRESENT;
+        } else {
+            status = AttendanceStatus.LATE;
+        }
         attendance.setStatus(status);
         attendance.setAttendanceTime(now);
     }
