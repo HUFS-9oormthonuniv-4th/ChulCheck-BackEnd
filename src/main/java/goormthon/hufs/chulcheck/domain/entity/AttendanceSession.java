@@ -35,6 +35,8 @@ public class AttendanceSession {
 	private Time endTime;
 	private LocalDateTime sessionDate;
 
+	private String attendanceCode;
+
 	@ManyToOne
 	@JoinColumn(name = "club_id")
 	private Club club;
