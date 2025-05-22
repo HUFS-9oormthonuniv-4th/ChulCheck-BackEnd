@@ -3,6 +3,7 @@ package goormthon.hufs.chulcheck.service;
 import goormthon.hufs.chulcheck.domain.dto.request.CreateClubRequest;
 import goormthon.hufs.chulcheck.domain.dto.request.ManageClubMemberRequest;
 import goormthon.hufs.chulcheck.domain.dto.request.UpdateClubRequest;
+import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse;
 import goormthon.hufs.chulcheck.domain.entity.Club;
 import goormthon.hufs.chulcheck.domain.entity.ClubMember;
 import goormthon.hufs.chulcheck.domain.entity.User;
@@ -16,7 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse.ClubInfo;
+import java.util.stream.Collectors;
 import java.util.List;
 
 @Service
@@ -114,10 +116,26 @@ public class ClubService {
         return memberRepository.findAllByClubId(clubId);
     }
 
-    public List<Club> getClubsByUserId(String userId) {
-        return clubMemberRepository.findAllByUserUserId(userId)
-            .stream()
-            .map(ClubMember::getClub)
-            .toList();
+    public List<GetClubInfoResponse> getClubsByUserId(String userId) {
+        // 사용자 존재 검증
+        userRepository.findByUserId(userId);
+
+        // 사용자가 속한 클럽 멤버십 조회
+        List<ClubMember> clubMembers = clubMemberRepository.findAllByUserUserId(userId);
+
+        // 각 멤버십별로 DTO 변환
+        return clubMembers.stream()
+            .map(clubMember -> {
+                var club = clubMember.getClub();
+                long memberCount = memberRepository.findAllByClubId(club.getId()).size();
+                String roleLabel = clubMember.getRole().name();
+
+                ClubInfo info = new ClubInfo();
+                info.setClub(club);
+                info.setRole(roleLabel);
+                info.setMemberCount(memberCount);
+                return GetClubInfoResponse.fromEntity(info);
+            })
+            .collect(Collectors.toList());
     }
 }
