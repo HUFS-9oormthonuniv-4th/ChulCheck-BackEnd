@@ -1,17 +1,14 @@
 package goormthon.hufs.chulcheck.domain.dto;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class OAuth2UserDTO {
+public class LoginResponse {
+    private String token;
     private String userId;
     private String nickname;
-    private String image;
     private String role;
+    private String message;
 }
