@@ -50,10 +50,10 @@ jobs:
         run: docker pull hub.klr.kr/chulcheck_back
 
       - name: 기존 컨테이너 중지
-        run: docker stop chulcheck_back_dev || true
+        run: docker stop chulcheck_back || true
 
       - name: 기존 컨테이너 제거
-        run: docker rm   chulcheck_back_dev || true
+        run: docker rm   chulcheck_back || true
 
       - name: 신규 컨테이너 실행
         run: |
