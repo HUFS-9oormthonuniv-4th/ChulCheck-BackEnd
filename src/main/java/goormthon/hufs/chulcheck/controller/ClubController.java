@@ -2,17 +2,13 @@ package goormthon.hufs.chulcheck.controller;
 
 import goormthon.hufs.chulcheck.domain.dto.CustomOAuth2User;
 import goormthon.hufs.chulcheck.domain.dto.request.AddAdministratorRequest;
-import goormthon.hufs.chulcheck.domain.dto.request.ClubJoinRequestDto;
 import goormthon.hufs.chulcheck.domain.dto.request.CreateClubRequest;
-import goormthon.hufs.chulcheck.domain.dto.request.ProcessJoinRequestDto;
 import goormthon.hufs.chulcheck.domain.dto.request.UpdateClubRequest;
-import goormthon.hufs.chulcheck.domain.dto.response.ClubJoinRequestResponse;
 import goormthon.hufs.chulcheck.domain.dto.response.ClubMemberResponse;
 import goormthon.hufs.chulcheck.domain.dto.response.ClubResponse;
 import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse;
 import goormthon.hufs.chulcheck.domain.entity.Club;
 import goormthon.hufs.chulcheck.domain.entity.ClubMember;
-import goormthon.hufs.chulcheck.domain.entity.ClubJoinRequest;
 import goormthon.hufs.chulcheck.service.ClubService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -121,178 +117,6 @@ public class ClubController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "동아리 삭제 중 오류가 발생했습니다."));
-        }
-    }
-
-    // ===== 동아리 가입 요청 관련 API =====
-
-    /**
-     * 동아리 가입 요청 생성
-     */
-    @PostMapping("/{clubId}/join-requests")
-    public ResponseEntity<?> createJoinRequest(
-            @PathVariable Long clubId,
-            @Valid @RequestBody ClubJoinRequestDto request,
-            Authentication authentication) {
-        String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
-
-        try {
-            ClubJoinRequest joinRequest = clubService.createJoinRequest(clubId, userId, request.getMessage());
-            ClubJoinRequestResponse response = ClubJoinRequestResponse.fromEntity(joinRequest);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "가입 요청 생성 중 오류가 발생했습니다."));
-        }
-    }
-
-    /**
-     * 동아리 가입 요청 목록 조회 (관리자용)
-     */
-    @GetMapping("/{clubId}/join-requests")
-    public ResponseEntity<?> getJoinRequests(
-            @PathVariable Long clubId,
-            Authentication authentication) {
-        String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
-
-        try {
-            List<ClubJoinRequest> joinRequests = clubService.getJoinRequests(clubId, userId);
-            List<ClubJoinRequestResponse> responses = ClubJoinRequestResponse.fromEntityList(joinRequests);
-            return ResponseEntity.ok(responses);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "가입 요청 목록 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    /**
-     * 대기중인 가입 요청만 조회 (관리자용)
-     */
-    @GetMapping("/{clubId}/join-requests/pending")
-    public ResponseEntity<?> getPendingJoinRequests(
-            @PathVariable Long clubId,
-            Authentication authentication) {
-        String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
-
-        try {
-            List<ClubJoinRequest> joinRequests = clubService.getPendingJoinRequests(clubId, userId);
-            List<ClubJoinRequestResponse> responses = ClubJoinRequestResponse.fromEntityList(joinRequests);
-            return ResponseEntity.ok(responses);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "대기중인 가입 요청 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    /**
-     * 사용자의 가입 요청 목록 조회
-     */
-    @GetMapping("/my-join-requests")
-    public ResponseEntity<?> getMyJoinRequests(Authentication authentication) {
-        String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
-
-        try {
-            List<ClubJoinRequest> joinRequests = clubService.getUserJoinRequests(userId);
-            List<ClubJoinRequestResponse> responses = ClubJoinRequestResponse.fromEntityList(joinRequests);
-            return ResponseEntity.ok(responses);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "가입 요청 목록 조회 중 오류가 발생했습니다."));
-        }
-    }
-
-    /**
-     * 가입 요청 처리 (승인/거절)
-     */
-    @PutMapping("/{clubId}/join-requests/{requestId}/process")
-    public ResponseEntity<?> processJoinRequest(
-            @PathVariable Long clubId,
-            @PathVariable Long requestId,
-            @Valid @RequestBody ProcessJoinRequestDto request,
-            Authentication authentication) {
-        String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
-
-        try {
-            if (request.getStatus() == goormthon.hufs.chulcheck.domain.enums.ClubStatus.ACTIVE) {
-                // 승인
-                ClubMember newMember = clubService.approveJoinRequest(requestId, userId);
-                ClubMemberResponse response = ClubMemberResponse.fromEntity(newMember);
-                return ResponseEntity.ok(Map.of(
-                    "message", "가입 요청이 승인되었습니다.",
-                    "member", response
-                ));
-            } else if (request.getStatus() == goormthon.hufs.chulcheck.domain.enums.ClubStatus.REJECTED) {
-                // 거절
-                ClubJoinRequest rejectedRequest = clubService.rejectJoinRequest(
-                    requestId, userId, request.getRejectionReason());
-                ClubJoinRequestResponse response = ClubJoinRequestResponse.fromEntity(rejectedRequest);
-                return ResponseEntity.ok(Map.of(
-                    "message", "가입 요청이 거절되었습니다.",
-                    "request", response
-                ));
-            } else {
-                return ResponseEntity.badRequest()
-                    .body(Map.of("error", "올바르지 않은 처리 상태입니다. ACTIVE(승인) 또는 REJECTED(거절)만 가능합니다."));
-            }
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "가입 요청 처리 중 오류가 발생했습니다."));
-        }
-    }
-
-    /**
-     * 가입 요청 취소 (사용자가 직접)
-     */
-    @DeleteMapping("/join-requests/{requestId}")
-    public ResponseEntity<?> cancelJoinRequest(
-            @PathVariable Long requestId,
-            Authentication authentication) {
-        String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
-
-        try {
-            clubService.cancelJoinRequest(requestId, userId);
-            return ResponseEntity.ok(Map.of("message", "가입 요청이 취소되었습니다."));
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "가입 요청 취소 중 오류가 발생했습니다."));
-        }
-    }
-
-    /**
-     * 동아리의 대기중인 가입 요청 개수 조회
-     */
-    @GetMapping("/{clubId}/join-requests/pending/count")
-    public ResponseEntity<?> getPendingJoinRequestCount(
-            @PathVariable Long clubId,
-            Authentication authentication) {
-        String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
-
-        try {
-            // 관리자만 조회 가능하도록 권한 확인
-            if (!clubService.isClubAdministrator(clubId, userId)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "동아리 관리자만 조회할 수 있습니다."));
-            }
-            
-            Long count = clubService.getPendingJoinRequestCount(clubId);
-            return ResponseEntity.ok(Map.of("pendingCount", count));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "대기중인 가입 요청 개수 조회 중 오류가 발생했습니다."));
         }
     }
 }
