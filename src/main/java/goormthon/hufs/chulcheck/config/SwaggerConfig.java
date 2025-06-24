@@ -1,5 +1,7 @@
 package goormthon.hufs.chulcheck.config;
 
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,20 +22,15 @@ public class SwaggerConfig {
 			.version("1.0")
 			.description("API for managing users and their profile images.");
 
-		Server server1 = new Server().url("http://localhost:8080");
-		Server server2 = new Server().url("https://api.chulcheck.kr");
-		List<Server> servers = new ArrayList<>();
-		servers.add(server1);
-		servers.add(server2);
-
 		return new OpenAPI()
-			.info(info)
-			.servers(servers);
-		// .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
-		// .components(new io.swagger.v3.oas.models.Components());
-		// .addSecuritySchemes("Bearer Authentication", new SecurityScheme()
-		// 	.type(SecurityScheme.Type.HTTP)
-		// 	.scheme("bearer")
-		// 	.bearerFormat("JWT")));
+				.info(info)
+				.addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
+				.addServersItem(new Server().url("/"))
+				.components(new io.swagger.v3.oas.models.Components()
+					.addSecuritySchemes("Bearer Authentication", new SecurityScheme()
+						.type(SecurityScheme.Type.HTTP)
+						.scheme("bearer")
+						.bearerFormat("JWT"))
+				);
 	}
 }
