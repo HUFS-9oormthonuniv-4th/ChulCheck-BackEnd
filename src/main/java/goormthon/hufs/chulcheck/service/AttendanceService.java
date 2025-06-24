@@ -4,10 +4,13 @@ import goormthon.hufs.chulcheck.domain.dto.response.GetAttendanceResponse;
 import goormthon.hufs.chulcheck.domain.dto.response.GetAttendanceStatsResponse;
 import goormthon.hufs.chulcheck.domain.entity.Attendance;
 import goormthon.hufs.chulcheck.domain.entity.AttendanceSession;
+import goormthon.hufs.chulcheck.domain.entity.ClubMember;
 import goormthon.hufs.chulcheck.domain.entity.User;
 import goormthon.hufs.chulcheck.domain.enums.AttendanceStatus;
+import goormthon.hufs.chulcheck.domain.enums.ClubRole;
 import goormthon.hufs.chulcheck.repository.AttendanceRepository;
 import goormthon.hufs.chulcheck.repository.AttendanceSessionRepository;
+import goormthon.hufs.chulcheck.repository.ClubMemberRepository;
 import goormthon.hufs.chulcheck.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,7 @@ public class AttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final UserRepository userRepository;
     private final AttendanceSessionRepository attendanceSessionRepository;
+    private final ClubMemberRepository clubMemberRepository;
 
     /**
      * QR 코드 스캔을 통한 출석 체크
@@ -155,6 +159,84 @@ public class AttendanceService {
             throw new EntityNotFoundException("출석 기록을 찾을 수 없습니다: " + id);
         }
         attendanceRepository.deleteById(id);
+    }
+
+    /**
+     * 특정 세션의 모든 출석을 '출석'으로 일괄 변경
+     * 관리자가 세션 종료 후 일괄 출석 처리할 때 사용
+     */
+    @Transactional
+    public List<Attendance> markAllAsPresent(Long sessionId, String userId) {
+        // 세션 존재 확인
+        AttendanceSession session = attendanceSessionRepository.findById(sessionId)
+            .orElseThrow(() -> new EntityNotFoundException("출석 세션을 찾을 수 없습니다: " + sessionId));
+        
+        // 사용자가 해당 동아리의 관리자인지 확인
+        ClubMember member = clubMemberRepository.findByClubIdAndUserUserId(session.getClub().getId(), userId)
+            .orElseThrow(() -> new SecurityException("해당 동아리에 속하지 않습니다."));
+        
+        if (member.getRole() != ClubRole.ROLE_MANAGER) {
+            throw new SecurityException("동아리 관리자만 출석을 일괄 변경할 수 있습니다.");
+        }
+        
+        // 해당 세션의 모든 출석 기록 조회
+        List<Attendance> attendances = attendanceRepository.findAllByAttendanceSessionId(sessionId);
+        
+        if (attendances.isEmpty()) {
+            throw new EntityNotFoundException("해당 세션에 출석 기록이 없습니다: " + sessionId);
+        }
+        
+        // 모든 출석을 '출석'으로 변경
+        LocalDateTime now = LocalDateTime.now();
+        for (Attendance attendance : attendances) {
+            attendance.setStatus(AttendanceStatus.PRESENT);
+            attendance.setAttendanceTime(now);
+        }
+        
+        List<Attendance> savedAttendances = attendanceRepository.saveAll(attendances);
+        
+        log.info("세션 {}의 모든 출석({})을 '출석'으로 일괄 변경 완료 by user {}", sessionId, attendances.size(), userId);
+        
+        return savedAttendances;
+    }
+
+    /**
+     * 특정 세션의 모든 출석을 '결석'으로 일괄 변경
+     * 관리자가 세션 종료 후 일괄 결석 처리할 때 사용
+     */
+    @Transactional
+    public List<Attendance> markAllAsAbsent(Long sessionId, String userId) {
+        // 세션 존재 확인
+        AttendanceSession session = attendanceSessionRepository.findById(sessionId)
+            .orElseThrow(() -> new EntityNotFoundException("출석 세션을 찾을 수 없습니다: " + sessionId));
+        
+        // 사용자가 해당 동아리의 관리자인지 확인
+        ClubMember member = clubMemberRepository.findByClubIdAndUserUserId(session.getClub().getId(), userId)
+            .orElseThrow(() -> new SecurityException("해당 동아리에 속하지 않습니다."));
+        
+        if (member.getRole() != ClubRole.ROLE_MANAGER) {
+            throw new SecurityException("동아리 관리자만 출석을 일괄 변경할 수 있습니다.");
+        }
+        
+        // 해당 세션의 모든 출석 기록 조회
+        List<Attendance> attendances = attendanceRepository.findAllByAttendanceSessionId(sessionId);
+        
+        if (attendances.isEmpty()) {
+            throw new EntityNotFoundException("해당 세션에 출석 기록이 없습니다: " + sessionId);
+        }
+        
+        // 모든 출석을 '결석'으로 변경
+        LocalDateTime now = LocalDateTime.now();
+        for (Attendance attendance : attendances) {
+            attendance.setStatus(AttendanceStatus.ABSENT);
+            attendance.setAttendanceTime(now);
+        }
+        
+        List<Attendance> savedAttendances = attendanceRepository.saveAll(attendances);
+        
+        log.info("세션 {}의 모든 출석({})을 '결석'으로 일괄 변경 완료 by user {}", sessionId, attendances.size(), userId);
+        
+        return savedAttendances;
     }
 
     /**

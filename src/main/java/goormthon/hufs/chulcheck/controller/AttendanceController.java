@@ -131,4 +131,62 @@ public class AttendanceController {
                     .body(Map.of("error", "출석 통계 조회 중 오류가 발생했습니다."));
         }
     }
+
+    @PostMapping("/sessions/{sessionId}/mark-all-present")
+    @Operation(summary = "세션 내 모든 출석을 '출석'으로 일괄 변경", description = "관리자가 특정 세션의 모든 사용자를 출석으로 일괄 처리합니다.")
+    public ResponseEntity<?> markAllAsPresent(@PathVariable Long sessionId,
+                                            Authentication authentication) {
+        try {
+            CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+            String userId = customOAuth2User.getUserId();
+            
+            List<Attendance> attendances = attendanceService.markAllAsPresent(sessionId, userId);
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "모든 출석이 '출석'으로 변경되었습니다.",
+                "sessionId", sessionId,
+                "updatedCount", attendances.size(),
+                "attendances", GetAttendanceResponse.fromEntity(attendances)
+            ));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("출석 일괄 변경 중 오류 발생", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "출석 일괄 변경 중 오류가 발생했습니다."));
+        }
+    }
+
+    @PostMapping("/sessions/{sessionId}/mark-all-absent")
+    @Operation(summary = "세션 내 모든 출석을 '결석'으로 일괄 변경", description = "관리자가 특정 세션의 모든 사용자를 결석으로 일괄 처리합니다.")
+    public ResponseEntity<?> markAllAsAbsent(@PathVariable Long sessionId,
+                                           Authentication authentication) {
+        try {
+            CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+            String userId = customOAuth2User.getUserId();
+            
+            List<Attendance> attendances = attendanceService.markAllAsAbsent(sessionId, userId);
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "모든 출석이 '결석'으로 변경되었습니다.",
+                "sessionId", sessionId,
+                "updatedCount", attendances.size(),
+                "attendances", GetAttendanceResponse.fromEntity(attendances)
+            ));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("출석 일괄 변경 중 오류 발생", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "출석 일괄 변경 중 오류가 발생했습니다."));
+        }
+    }
 }
