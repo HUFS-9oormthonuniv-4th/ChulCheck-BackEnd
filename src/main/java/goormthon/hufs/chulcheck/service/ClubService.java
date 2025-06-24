@@ -6,11 +6,13 @@ import goormthon.hufs.chulcheck.domain.dto.request.UpdateClubRequest;
 import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse;
 import goormthon.hufs.chulcheck.domain.entity.Club;
 import goormthon.hufs.chulcheck.domain.entity.ClubMember;
+import goormthon.hufs.chulcheck.domain.entity.ClubJoinRequest;
 import goormthon.hufs.chulcheck.domain.entity.User;
 import goormthon.hufs.chulcheck.domain.enums.ClubRole;
 import goormthon.hufs.chulcheck.domain.enums.ClubStatus;
 import goormthon.hufs.chulcheck.repository.ClubRepository;
 import goormthon.hufs.chulcheck.repository.ClubMemberRepository;
+import goormthon.hufs.chulcheck.repository.ClubJoinRequestRepository;
 import goormthon.hufs.chulcheck.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ import java.util.Optional;
 public class ClubService {
     private final ClubRepository clubRepository;
     private final ClubMemberRepository memberRepository;
+    private final ClubJoinRequestRepository joinRequestRepository;
     private final UserRepository userRepository;
     private final ClubMemberRepository clubMemberRepository;
 
@@ -181,5 +184,152 @@ public class ClubService {
     public boolean isClubAdministrator(Long clubId, String userId) {
         Optional<ClubMember> member = memberRepository.findByClubIdAndUserUserId(clubId, userId);
         return member.isPresent() && member.get().getRole() == ClubRole.ROLE_MANAGER;
+    }
+
+    // ===== 가입 요청 관련 메소드들 =====
+    
+    /**
+     * 동아리 가입 요청 생성
+     */
+    @Transactional
+    public ClubJoinRequest createJoinRequest(Long clubId, String userId, String message) {
+        Club club = getClub(clubId);
+        User user = userRepository.findByUserId(userId);
+        
+        // 이미 멤버인지 확인
+        if (memberRepository.findByClubIdAndUserUserId(clubId, userId).isPresent()) {
+            throw new IllegalStateException("이미 해당 동아리의 멤버입니다.");
+        }
+        
+        // 이미 대기중인 요청이 있는지 확인
+        if (joinRequestRepository.existsByClubAndUserAndStatus(club, user, ClubStatus.PENDING)) {
+            throw new IllegalStateException("이미 대기중인 가입 요청이 있습니다.");
+        }
+        
+        ClubJoinRequest joinRequest = ClubJoinRequest.builder()
+                .club(club)
+                .user(user)
+                .message(message)
+                .build();
+        
+        return joinRequestRepository.save(joinRequest);
+    }
+    
+    /**
+     * 동아리의 가입 요청 목록 조회 (관리자용)
+     */
+    public List<ClubJoinRequest> getJoinRequests(Long clubId, String adminUserId) {
+        if (!isClubAdministrator(clubId, adminUserId)) {
+            throw new SecurityException("동아리 관리자만 가입 요청을 조회할 수 있습니다.");
+        }
+        
+        Club club = getClub(clubId);
+        return joinRequestRepository.findByClubOrderByCreatedAtDesc(club);
+    }
+    
+    /**
+     * 대기중인 가입 요청만 조회 (관리자용)
+     */
+    public List<ClubJoinRequest> getPendingJoinRequests(Long clubId, String adminUserId) {
+        if (!isClubAdministrator(clubId, adminUserId)) {
+            throw new SecurityException("동아리 관리자만 가입 요청을 조회할 수 있습니다.");
+        }
+        
+        Club club = getClub(clubId);
+        return joinRequestRepository.findByClubAndStatusOrderByCreatedAtDesc(club, ClubStatus.PENDING);
+    }
+    
+    /**
+     * 사용자의 가입 요청 목록 조회
+     */
+    public List<ClubJoinRequest> getUserJoinRequests(String userId) {
+        User user = userRepository.findByUserId(userId);
+        return joinRequestRepository.findByUserOrderByCreatedAtDesc(user);
+    }
+    
+    /**
+     * 가입 요청 승인
+     */
+    @Transactional
+    public ClubMember approveJoinRequest(Long requestId, String adminUserId) {
+        ClubJoinRequest joinRequest = joinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new EntityNotFoundException("가입 요청을 찾을 수 없습니다."));
+        
+        if (!isClubAdministrator(joinRequest.getClub().getId(), adminUserId)) {
+            throw new SecurityException("동아리 관리자만 가입 요청을 처리할 수 있습니다.");
+        }
+        
+        if (joinRequest.getStatus() != ClubStatus.PENDING) {
+            throw new IllegalStateException("이미 처리된 요청입니다.");
+        }
+        
+        // 이미 멤버인지 다시 한번 확인 (동시성 문제 방지)
+        if (memberRepository.findByClubIdAndUserUserId(
+                joinRequest.getClub().getId(), 
+                joinRequest.getUser().getUserId()).isPresent()) {
+            throw new IllegalStateException("이미 해당 동아리의 멤버입니다.");
+        }
+        
+        // 가입 요청 승인 처리
+        joinRequest.approve();
+        joinRequestRepository.save(joinRequest);
+        
+        // 멤버로 등록
+        ClubMember newMember = ClubMember.builder()
+                .club(joinRequest.getClub())
+                .user(joinRequest.getUser())
+                .role(ClubRole.ROLE_MEMBER)
+                .status(ClubStatus.ACTIVE)
+                .build();
+        
+        return memberRepository.save(newMember);
+    }
+    
+    /**
+     * 가입 요청 거절
+     */
+    @Transactional
+    public ClubJoinRequest rejectJoinRequest(Long requestId, String adminUserId, String rejectionReason) {
+        ClubJoinRequest joinRequest = joinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new EntityNotFoundException("가입 요청을 찾을 수 없습니다."));
+        
+        if (!isClubAdministrator(joinRequest.getClub().getId(), adminUserId)) {
+            throw new SecurityException("동아리 관리자만 가입 요청을 처리할 수 있습니다.");
+        }
+        
+        if (joinRequest.getStatus() != ClubStatus.PENDING) {
+            throw new IllegalStateException("이미 처리된 요청입니다.");
+        }
+        
+        // 가입 요청 거절 처리
+        joinRequest.reject(rejectionReason);
+        return joinRequestRepository.save(joinRequest);
+    }
+    
+    /**
+     * 가입 요청 취소 (사용자가 직접)
+     */
+    @Transactional
+    public void cancelJoinRequest(Long requestId, String userId) {
+        ClubJoinRequest joinRequest = joinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new EntityNotFoundException("가입 요청을 찾을 수 없습니다."));
+        
+        if (!joinRequest.getUser().getUserId().equals(userId)) {
+            throw new SecurityException("본인의 가입 요청만 취소할 수 있습니다.");
+        }
+        
+        if (joinRequest.getStatus() != ClubStatus.PENDING) {
+            throw new IllegalStateException("대기중인 요청만 취소할 수 있습니다.");
+        }
+        
+        joinRequestRepository.delete(joinRequest);
+    }
+    
+    /**
+     * 동아리의 대기중인 가입 요청 개수 조회
+     */
+    public Long getPendingJoinRequestCount(Long clubId) {
+        Club club = getClub(clubId);
+        return joinRequestRepository.countByClubAndStatus(club, ClubStatus.PENDING);
     }
 }
