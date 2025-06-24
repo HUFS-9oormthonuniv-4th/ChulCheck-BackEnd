@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse.ClubInfo;
 import java.util.stream.Collectors;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -32,23 +33,22 @@ public class ClubService {
 
     @Transactional
     public Club createClub(CreateClubRequest req) {
-        User owner = userRepository.findByUserId(req.getOwnerId());
+        User creator = userRepository.findByUserId(req.getOwnerId());
         Club club = Club.builder()
             .name(req.getName())
             .representativeAlias(req.getRepresentativeAlias())
             .memberAlias(req.getMemberAlias())
             .description(req.getDescription())
-            .owner(owner)
             .build();
         Club saved = clubRepository.save(club);
 
-        ClubMember ownerMember = ClubMember.builder()
+        ClubMember adminMember = ClubMember.builder()
             .club(saved)
-            .user(owner)
+            .user(creator)
             .role(ClubRole.ROLE_MANAGER)
             .status(ClubStatus.ACTIVE)
             .build();
-        memberRepository.save(ownerMember);
+        memberRepository.save(adminMember);
         return saved;
     }
 
@@ -105,6 +105,28 @@ public class ClubService {
     }
 
     @Transactional
+    public ClubMember addAdministrator(Long clubId, String userId) {
+        Club club = getClub(clubId);
+        User user = userRepository.findByUserId(userId);
+
+        Optional<ClubMember> existingMember = memberRepository.findByClubIdAndUserUserId(clubId, userId);
+
+        if (existingMember.isPresent()) {
+            ClubMember member = existingMember.get();
+            member.setRole(ClubRole.ROLE_MANAGER);
+            return memberRepository.save(member);
+        } else {
+            ClubMember newAdmin = ClubMember.builder()
+                .club(club)
+                .user(user)
+                .role(ClubRole.ROLE_MANAGER)
+                .status(ClubStatus.ACTIVE)
+                .build();
+            return memberRepository.save(newAdmin);
+        }
+    }
+
+    @Transactional
     public void removeMember(Long clubId, String userId) {
         ClubMember member = memberRepository.findByClubIdAndUserUserId(clubId, userId)
             .orElseThrow(() -> new EntityNotFoundException("해당 User의 모임 가입정보를 찾을 수 없습니다: " + userId));
@@ -114,6 +136,11 @@ public class ClubService {
     public List<ClubMember> getMembers(Long clubId) {
         getClub(clubId);
         return memberRepository.findAllByClubId(clubId);
+    }
+
+    public List<ClubMember> getAdministrators(Long clubId) {
+        getClub(clubId);
+        return memberRepository.findAllByClubIdAndRole(clubId, ClubRole.ROLE_MANAGER);
     }
 
     public List<GetClubInfoResponse> getClubsByUserId(String userId) {
