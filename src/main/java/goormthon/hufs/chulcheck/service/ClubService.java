@@ -62,7 +62,11 @@ public class ClubService {
     }
 
     @Transactional
-    public Club updateClub(Long clubId, UpdateClubRequest req) {
+    public Club updateClub(Long clubId, UpdateClubRequest req, String userId) {
+        if (!isClubAdministrator(clubId, userId)) {
+            throw new SecurityException("Only administrators can update clubs");
+        }
+
         Club club = getClub(clubId);
         club.setName(req.getName());
         club.setRepresentativeAlias(req.getRepresentativeAlias());
@@ -72,7 +76,11 @@ public class ClubService {
     }
 
     @Transactional
-    public void deleteClub(Long clubId) {
+    public void deleteClub(Long clubId, String userId) {
+        if (!isClubAdministrator(clubId, userId)) {
+            throw new SecurityException("Only administrators can delete clubs");
+        }
+
         if (!clubRepository.existsById(clubId)) {
             throw new EntityNotFoundException("Club not found: " + clubId);
         }
@@ -105,11 +113,15 @@ public class ClubService {
     }
 
     @Transactional
-    public ClubMember addAdministrator(Long clubId, String userId) {
-        Club club = getClub(clubId);
-        User user = userRepository.findByUserId(userId);
+    public ClubMember addAdministrator(Long clubId, String newAdminUserId, String currentUserId) {
+        if (!isClubAdministrator(clubId, currentUserId)) {
+            throw new SecurityException("Only administrators can add new administrators");
+        }
 
-        Optional<ClubMember> existingMember = memberRepository.findByClubIdAndUserUserId(clubId, userId);
+        Club club = getClub(clubId);
+        User user = userRepository.findByUserId(newAdminUserId);
+
+        Optional<ClubMember> existingMember = memberRepository.findByClubIdAndUserUserId(clubId, newAdminUserId);
 
         if (existingMember.isPresent()) {
             ClubMember member = existingMember.get();
@@ -164,5 +176,10 @@ public class ClubService {
                 return GetClubInfoResponse.fromEntity(info);
             })
             .collect(Collectors.toList());
+    }
+
+    public boolean isClubAdministrator(Long clubId, String userId) {
+        Optional<ClubMember> member = memberRepository.findByClubIdAndUserUserId(clubId, userId);
+        return member.isPresent() && member.get().getRole() == ClubRole.ROLE_MANAGER;
     }
 }
