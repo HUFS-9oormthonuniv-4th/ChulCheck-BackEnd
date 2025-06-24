@@ -4,44 +4,131 @@ import goormthon.hufs.chulcheck.domain.dto.CustomOAuth2User;
 import goormthon.hufs.chulcheck.domain.dto.request.CreateAttendenceRequest;
 import goormthon.hufs.chulcheck.domain.dto.response.GetAttendanceResponse;
 import goormthon.hufs.chulcheck.domain.dto.response.GetAttendanceStatsResponse;
+import goormthon.hufs.chulcheck.domain.entity.Attendance;
 import goormthon.hufs.chulcheck.service.AttendanceService;
-import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
 
 @RequestMapping("/api/v1/attendance")
 @RestController
 @RequiredArgsConstructor
+@Slf4j
+@Tag(name = "Attendance", description = "출석 관리 API")
+@CrossOrigin(origins = "*")
 public class AttendanceController {
     private final AttendanceService attendanceService;
 
     @PostMapping
-    public void attendance(Authentication authentication,
+    @Operation(summary = "QR 코드를 통한 출석 체크", description = "QR 코드 스캔으로 출석을 체크합니다.")
+    public ResponseEntity<?> attendance(Authentication authentication,
                            @RequestBody CreateAttendenceRequest request) {
-        CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
-        String userId = customOAuth2User.getUserId();
-        attendanceService.createAttendance(userId, request.getSessionId(), request.getCode());
+        try {
+            CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+            String userId = customOAuth2User.getUserId();
+            Attendance attendance = attendanceService.createAttendance(userId, request.getSessionId(), request.getCode());
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "출석 체크가 완료되었습니다.",
+                "attendanceId", attendance.getId(),
+                "status", attendance.getStatus(),
+                "attendanceTime", attendance.getAttendanceTime(),
+                "sessionName", attendance.getAttendanceSession().getSessionName(),
+                "place", attendance.getAttendanceSession().getPlace()
+            ));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("출석 체크 중 오류 발생", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "출석 체크 중 오류가 발생했습니다."));
+        }
+    }
+
+    @PostMapping("/by-code")
+    @Operation(summary = "출석 코드를 통한 출석 체크", description = "출석 코드를 입력하여 출석을 체크합니다.")
+    public ResponseEntity<?> attendanceByCode(Authentication authentication,
+                                             @RequestBody Map<String, String> request) {
+        try {
+            CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+            String userId = customOAuth2User.getUserId();
+            String attendanceCode = request.get("code");
+            
+            if (attendanceCode == null || attendanceCode.trim().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("error", "출석 코드를 입력해주세요."));
+            }
+            
+            Attendance attendance = attendanceService.checkAttendanceByCode(userId, attendanceCode.trim());
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "출석 체크가 완료되었습니다.",
+                "status", attendance.getStatus(),
+                "attendanceTime", attendance.getAttendanceTime(),
+                "sessionName", attendance.getAttendanceSession().getSessionName(),
+                "place", attendance.getAttendanceSession().getPlace()
+            ));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("출석 코드 체크 중 오류 발생", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "출석 체크 중 오류가 발생했습니다."));
+        }
     }
 
     @GetMapping
-    public List<GetAttendanceResponse> getAllAttendances(Authentication authentication,
+    @Operation(summary = "사용자별 출석 목록 조회", description = "특정 동아리에서 사용자의 모든 출석 기록을 조회합니다.")
+    public ResponseEntity<?> getAllAttendances(Authentication authentication,
                                                      @RequestParam Long clubId) {
-        CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
-        String userId = customOAuth2User.getUserId();
-        return attendanceService.getAllAttendancesByUserAndClub(userId, clubId);
+        try {
+            CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+            String userId = customOAuth2User.getUserId();
+            List<GetAttendanceResponse> attendances = attendanceService.getAllAttendancesByUserAndClub(userId, clubId);
+            return ResponseEntity.ok(attendances);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("출석 목록 조회 중 오류 발생", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "출석 목록 조회 중 오류가 발생했습니다."));
+        }
     }
 
     @GetMapping("/stats")
-    public GetAttendanceStatsResponse getAttendanceStats(Authentication authentication,
+    @Operation(summary = "사용자별 출석 통계 조회", description = "특정 동아리에서 사용자의 출석 통계를 조회합니다.")
+    public ResponseEntity<?> getAttendanceStats(Authentication authentication,
                                                          @RequestParam Long clubId) {
-        CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
-        String userId = customOAuth2User.getUserId();
-        return attendanceService.getAttendanceStatsByUserAndClub(userId, clubId);
+        try {
+            CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+            String userId = customOAuth2User.getUserId();
+            GetAttendanceStatsResponse stats = attendanceService.getAttendanceStatsByUserAndClub(userId, clubId);
+            return ResponseEntity.ok(stats);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("출석 통계 조회 중 오류 발생", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "출석 통계 조회 중 오류가 발생했습니다."));
+        }
     }
 }

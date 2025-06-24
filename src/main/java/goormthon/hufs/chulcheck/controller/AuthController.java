@@ -22,6 +22,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Authentication", description = "인증 관련 API")
+@CrossOrigin(origins = "*")
 public class AuthController {
     
     private final AuthService authService;

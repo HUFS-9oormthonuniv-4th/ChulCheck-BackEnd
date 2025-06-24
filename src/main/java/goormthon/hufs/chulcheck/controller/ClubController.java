@@ -3,13 +3,14 @@ package goormthon.hufs.chulcheck.controller;
 import goormthon.hufs.chulcheck.domain.dto.CustomOAuth2User;
 import goormthon.hufs.chulcheck.domain.dto.request.CreateClubRequest;
 import goormthon.hufs.chulcheck.domain.dto.request.UpdateClubRequest;
+import goormthon.hufs.chulcheck.domain.dto.response.ClubMemberResponse;
+import goormthon.hufs.chulcheck.domain.dto.response.ClubResponse;
 import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse;
 import goormthon.hufs.chulcheck.domain.entity.Club;
 import goormthon.hufs.chulcheck.domain.entity.ClubMember;
 import goormthon.hufs.chulcheck.service.ClubService;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,17 +37,29 @@ public class ClubController {
     }
 
     @PostMapping
-    public ResponseEntity<Club> createClub(@RequestBody CreateClubRequest request, Authentication authentication) {
-        String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
-        request.setOwnerId(userId);
-        Club createdClub = clubService.createClub(request);
-        return new ResponseEntity<>(createdClub, HttpStatus.CREATED);
+    public ResponseEntity<?> createClub(@RequestBody CreateClubRequest request, Authentication authentication) {
+        try {
+            String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
+            request.setOwnerId(userId);
+            Club createdClub = clubService.createClub(request);
+            ClubResponse response = ClubResponse.fromEntity(createdClub);
+            return new ResponseEntity<>(response, HttpStatus.CREATED);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "동아리 생성 중 오류가 발생했습니다."));
+        }
     }
 
     @GetMapping("/{clubId}/administrators")
-    public ResponseEntity<List<ClubMember>> getClubAdministrators(@PathVariable Long clubId) {
-        List<ClubMember> administrators = clubService.getAdministrators(clubId);
-        return ResponseEntity.ok(administrators);
+    public ResponseEntity<?> getClubAdministrators(@PathVariable Long clubId) {
+        try {
+            List<ClubMember> administrators = clubService.getAdministrators(clubId);
+            List<ClubMemberResponse> responses = ClubMemberResponse.fromEntityList(administrators);
+            return ResponseEntity.ok(responses);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "관리자 목록 조회 중 오류가 발생했습니다."));
+        }
     }
 
     @PutMapping("/{clubId}/administrators")
@@ -59,9 +72,13 @@ public class ClubController {
 
         try {
             ClubMember administrator = clubService.addAdministrator(clubId, newAdminUserId, currentUserId);
-            return ResponseEntity.ok(administrator);
+            ClubMemberResponse response = ClubMemberResponse.fromEntity(administrator);
+            return ResponseEntity.ok(response);
         } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "관리자 추가 중 오류가 발생했습니다."));
         }
     }
 
@@ -74,9 +91,13 @@ public class ClubController {
 
         try {
             Club updatedClub = clubService.updateClub(clubId, request, userId);
-            return ResponseEntity.ok(updatedClub);
+            ClubResponse response = ClubResponse.fromEntity(updatedClub);
+            return ResponseEntity.ok(response);
         } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "동아리 수정 중 오류가 발생했습니다."));
         }
     }
 
@@ -90,7 +111,10 @@ public class ClubController {
             clubService.deleteClub(clubId, userId);
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "동아리 삭제 중 오류가 발생했습니다."));
         }
     }
 }

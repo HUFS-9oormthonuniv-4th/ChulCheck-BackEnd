@@ -1,5 +1,6 @@
 package goormthon.hufs.chulcheck.domain.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -27,6 +28,7 @@ public class Club {
 	private String description;
 
 	@OneToMany(mappedBy = "club", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+	@JsonIgnore  // 순환 참조 방지
 	private List<ClubMember> members = new ArrayList<>();
 
 	@Builder

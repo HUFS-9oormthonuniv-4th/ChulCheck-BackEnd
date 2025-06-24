@@ -1,5 +1,6 @@
 package goormthon.hufs.chulcheck.domain.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -51,6 +52,7 @@ public class User {
     private String providerId; // OAuth 제공자의 사용자 ID
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore  // 순환 참조 방지
     private List<ClubMember> clubMemberships = new ArrayList<>();
 
     @CreationTimestamp

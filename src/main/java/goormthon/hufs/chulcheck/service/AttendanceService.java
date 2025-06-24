@@ -11,6 +11,7 @@ import goormthon.hufs.chulcheck.repository.AttendanceSessionRepository;
 import goormthon.hufs.chulcheck.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,38 +23,86 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class AttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final UserRepository userRepository;
     private final AttendanceSessionRepository attendanceSessionRepository;
 
     /**
-     * 메서드명은 createAttendance로 했지만 세션 존재 여부 확인하고 기존 Attendance 출석처리함
-     * -> AttendanceSessionService에서 initializeAttendance로 Attendance를 결석으로 생성해 둠
+     * QR 코드 스캔을 통한 출석 체크
+     * 출석 코드로 세션을 찾고, 해당 사용자의 출석 상태를 업데이트
      */
     @Transactional
     public Attendance createAttendance(String userId, Long sessionId, String attendanceCode) {
         User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            throw new EntityNotFoundException("사용자를 찾을 수 없습니다: " + userId);
+        }
+
         AttendanceSession session = attendanceSessionRepository.findById(sessionId)
-            .orElseThrow(() -> new EntityNotFoundException("Session이 발견되지 않았습니다: " + sessionId));
+            .orElseThrow(() -> new EntityNotFoundException("출석 세션을 찾을 수 없습니다: " + sessionId));
 
         if (!session.getAttendanceCode().equals(attendanceCode)) {
-            throw new IllegalArgumentException("인증코드가 일치하지 않습니다.");
+            throw new IllegalArgumentException("출석 코드가 일치하지 않습니다.");
         }
 
         Attendance attendance = attendanceRepository
             .findByUserUserIdAndAttendanceSessionId(userId, sessionId)
             .orElseThrow(() -> new EntityNotFoundException(
-                "Attendance가 존재하지 않습니다. userId=" + userId + ", sessionId=" + sessionId));
+                "출석 기록이 존재하지 않습니다. userId=" + userId + ", sessionId=" + sessionId));
 
         applyStatusAndTime(attendance, session);
+        
+        Attendance savedAttendance = attendanceRepository.save(attendance);
+        log.info("출석 체크 완료: userId={}, sessionId={}, status={}", 
+                userId, sessionId, savedAttendance.getStatus());
+        
+        return savedAttendance;
+    }
 
-        return attendanceRepository.save(attendance);
+    /**
+     * 출석 코드로 직접 출석 체크 (QR 코드 대신 수동 입력)
+     */
+    @Transactional
+    public Attendance checkAttendanceByCode(String userId, String attendanceCode) {
+        User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            throw new EntityNotFoundException("사용자를 찾을 수 없습니다: " + userId);
+        }
+
+        AttendanceSession session = attendanceSessionRepository.findByAttendanceCode(attendanceCode)
+            .orElseThrow(() -> new EntityNotFoundException("유효하지 않은 출석 코드입니다: " + attendanceCode));
+
+        // 출석 가능 시간 확인
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime sessionStart = LocalDateTime.of(session.getSessionDate(), session.getStartTime());
+        LocalDateTime sessionEnd = LocalDateTime.of(session.getSessionDate(), session.getEndTime());
+        
+        if (now.isBefore(sessionStart)) {
+            throw new IllegalStateException("아직 출석 시간이 아닙니다. 시작 시간: " + sessionStart);
+        }
+        if (now.isAfter(sessionEnd)) {
+            throw new IllegalStateException("출석 가능 시간이 지났습니다. 마감 시간: " + sessionEnd);
+        }
+
+        Attendance attendance = attendanceRepository
+            .findByUserUserIdAndAttendanceSessionId(userId, session.getId())
+            .orElseThrow(() -> new EntityNotFoundException(
+                "출석 기록이 존재하지 않습니다. userId=" + userId + ", sessionId=" + session.getId()));
+
+        applyStatusAndTime(attendance, session);
+        
+        Attendance savedAttendance = attendanceRepository.save(attendance);
+        log.info("출석 코드로 출석 체크 완료: userId={}, code={}, status={}", 
+                userId, attendanceCode, savedAttendance.getStatus());
+        
+        return savedAttendance;
     }
 
     public Attendance getAttendance(Long id) {
         return attendanceRepository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException("Attendance가 발견되지 않았습니다." + id));
+            .orElseThrow(() -> new EntityNotFoundException("출석 기록을 찾을 수 없습니다: " + id));
     }
 
     public List<Attendance> getAllAttendances() {
@@ -61,13 +110,20 @@ public class AttendanceService {
     }
 
     public List<GetAttendanceResponse> getAllAttendancesByUserAndClub(String userId, Long clubId) {
-        userRepository.findByUserId(userId);
+        User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            throw new EntityNotFoundException("사용자를 찾을 수 없습니다: " + userId);
+        }
+        
         List<Attendance> attendances = attendanceRepository.findAllByUserUserIdAndAttendanceSessionClubId(userId, clubId);
         return GetAttendanceResponse.fromEntity(attendances);
     }
 
     public GetAttendanceStatsResponse getAttendanceStatsByUserAndClub(String userId, Long clubId) {
-        userRepository.findByUserId(userId);
+        User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            throw new EntityNotFoundException("사용자를 찾을 수 없습니다: " + userId);
+        }
 
         List<Attendance> attendances =
                 attendanceRepository.findAllByUserUserIdAndAttendanceSessionClubId(userId, clubId);
@@ -96,25 +152,24 @@ public class AttendanceService {
     @Transactional
     public void deleteAttendance(Long id) {
         if (!attendanceRepository.existsById(id)) {
-            throw new EntityNotFoundException("Attendance가 발견되지 않았습니다." + id);
+            throw new EntityNotFoundException("출석 기록을 찾을 수 없습니다: " + id);
         }
         attendanceRepository.deleteById(id);
     }
 
     /**
-     * 출석 진행 -> 출석시간, 상태 변경
-     * 어차피 포인터로 가니까 반환 따로 안함
+     * 출석 시간과 상태를 결정
+     * 세션 시작 시간 이전 또는 정시: 출석
+     * 세션 시작 시간 이후 세션 종료 시간 이전: 지각
+     * 세션 종료 시간 이후: 출석 불가
      */
     private void applyStatusAndTime(Attendance attendance, AttendanceSession session) {
         LocalDateTime now = LocalDateTime.now();
-        LocalDate sessionDatePart = session.getSessionDateTime().toLocalDate();
-        LocalTime startLocalTime = session.getStartTime().toLocalTime();
-        LocalTime endLocalTime = session.getEndTime().toLocalTime();
-        LocalDateTime sessionStart = LocalDateTime.of(sessionDatePart, startLocalTime);
-        LocalDateTime sessionEnd = LocalDateTime.of(sessionDatePart, endLocalTime);
+        LocalDateTime sessionStart = LocalDateTime.of(session.getSessionDate(), session.getStartTime());
+        LocalDateTime sessionEnd = LocalDateTime.of(session.getSessionDate(), session.getEndTime());
 
         if (now.isAfter(sessionEnd)) {
-            throw new IllegalStateException("출석 가능 시간이 지났습니다. 마감: " + sessionEnd);
+            throw new IllegalStateException("출석 가능 시간이 지났습니다. 마감 시간: " + sessionEnd);
         }
 
         AttendanceStatus status;
@@ -123,6 +178,7 @@ public class AttendanceService {
         } else {
             status = AttendanceStatus.LATE;
         }
+        
         attendance.setStatus(status);
         attendance.setAttendanceTime(now);
     }
