@@ -24,7 +24,7 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     @Value("${app.frontend.url}")
     private String frontendUrl;
     
-    @Value("${app.jwt.expiration-hours:10}")
+    @Value("${app.jwt.expiration-hours}")
     private int tokenExpirationHours;
     
     public CustomSuccessHandler(JwtUtil jwtUtil) {
