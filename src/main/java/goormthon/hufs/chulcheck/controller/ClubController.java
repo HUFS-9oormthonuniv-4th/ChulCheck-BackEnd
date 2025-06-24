@@ -1,6 +1,7 @@
 package goormthon.hufs.chulcheck.controller;
 
 import goormthon.hufs.chulcheck.domain.dto.CustomOAuth2User;
+import goormthon.hufs.chulcheck.domain.dto.request.AddAdministratorRequest;
 import goormthon.hufs.chulcheck.domain.dto.request.CreateClubRequest;
 import goormthon.hufs.chulcheck.domain.dto.request.UpdateClubRequest;
 import goormthon.hufs.chulcheck.domain.dto.response.ClubMemberResponse;
@@ -9,6 +10,7 @@ import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse;
 import goormthon.hufs.chulcheck.domain.entity.Club;
 import goormthon.hufs.chulcheck.domain.entity.ClubMember;
 import goormthon.hufs.chulcheck.service.ClubService;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -65,10 +67,10 @@ public class ClubController {
     @PutMapping("/{clubId}/administrators")
     public ResponseEntity<?> addClubAdministrator(
             @PathVariable Long clubId, 
-            @RequestBody Map<String, String> request,
+            @Valid @RequestBody AddAdministratorRequest request,
             Authentication authentication) {
         String currentUserId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
-        String newAdminUserId = request.get("userId");
+        String newAdminUserId = request.getUserId();
 
         try {
             ClubMember administrator = clubService.addAdministrator(clubId, newAdminUserId, currentUserId);
