@@ -3,16 +3,22 @@ package goormthon.hufs.chulcheck.service;
 import goormthon.hufs.chulcheck.domain.dto.request.CreateClubRequest;
 import goormthon.hufs.chulcheck.domain.dto.request.ManageClubMemberRequest;
 import goormthon.hufs.chulcheck.domain.dto.request.UpdateClubRequest;
+import goormthon.hufs.chulcheck.domain.dto.response.ClubDetailResponse;
 import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse;
 import goormthon.hufs.chulcheck.domain.entity.Club;
 import goormthon.hufs.chulcheck.domain.entity.ClubMember;
 import goormthon.hufs.chulcheck.domain.entity.ClubJoinRequest;
+import goormthon.hufs.chulcheck.domain.entity.AttendanceSession;
+import goormthon.hufs.chulcheck.domain.entity.Attendance;
 import goormthon.hufs.chulcheck.domain.entity.User;
 import goormthon.hufs.chulcheck.domain.enums.ClubRole;
 import goormthon.hufs.chulcheck.domain.enums.ClubStatus;
+import goormthon.hufs.chulcheck.domain.enums.AttendanceStatus;
 import goormthon.hufs.chulcheck.repository.ClubRepository;
 import goormthon.hufs.chulcheck.repository.ClubMemberRepository;
 import goormthon.hufs.chulcheck.repository.ClubJoinRequestRepository;
+import goormthon.hufs.chulcheck.repository.AttendanceSessionRepository;
+import goormthon.hufs.chulcheck.repository.AttendanceRepository;
 import goormthon.hufs.chulcheck.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse.ClubInfo;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +38,8 @@ public class ClubService {
     private final ClubRepository clubRepository;
     private final ClubMemberRepository memberRepository;
     private final ClubJoinRequestRepository joinRequestRepository;
+    private final AttendanceSessionRepository attendanceSessionRepository;
+    private final AttendanceRepository attendanceRepository;
     private final UserRepository userRepository;
     private final ClubMemberRepository clubMemberRepository;
 
@@ -331,5 +340,124 @@ public class ClubService {
     public Long getPendingJoinRequestCount(Long clubId) {
         Club club = getClub(clubId);
         return joinRequestRepository.countByClubAndStatus(club, ClubStatus.PENDING);
+    }
+    
+    /**
+     * 동아리 상세 정보 조회 (관리자용)
+     */
+    public ClubDetailResponse getClubDetail(Long clubId, String userId) {
+        if (!isClubAdministrator(clubId, userId)) {
+            throw new SecurityException("동아리 관리자만 상세 정보를 조회할 수 있습니다.");
+        }
+        
+        Club club = getClub(clubId);
+        
+        // 기본 통계 정보
+        int memberCount = memberRepository.findAllByClubId(clubId).size();
+        int sessionCount = (int) attendanceSessionRepository.countByClubId(clubId);
+        
+        // 기본 응답 객체 생성
+        ClubDetailResponse response = ClubDetailResponse.fromEntity(club, memberCount, sessionCount);
+        
+        // 상세 정보 추가
+        response.setMembers(getClubMemberDetails(clubId));
+        response.setAttendanceSessions(getAttendanceSessionSummaries(clubId));
+        
+        return response;
+    }
+    
+    /**
+     * 동아리 멤버 상세 정보 조회
+     */
+    private List<ClubDetailResponse.ClubMemberDetailDto> getClubMemberDetails(Long clubId) {
+        List<ClubMember> members = memberRepository.findAllByClubId(clubId);
+        
+        return members.stream()
+                .map(member -> {
+                    User user = member.getUser();
+                    
+                    // 해당 사용자의 출석률 계산
+                    double attendanceRate = calculateUserAttendanceRate(user.getUserId(), clubId);
+                    
+                    return ClubDetailResponse.ClubMemberDetailDto.builder()
+                            .userId(user.getUserId())
+                            .name(user.getName())
+                            .nickname(user.getNickname())
+                            .major(user.getMajor())
+                            .school(user.getSchool())
+                            .role(member.getRole().name())
+                            .joinedAt(member.getJoinedAt())
+                            .attendanceRate(attendanceRate)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * 출석 세션 요약 정보 조회
+     */
+    private List<ClubDetailResponse.AttendanceSessionSummaryDto> getAttendanceSessionSummaries(Long clubId) {
+        List<AttendanceSession> sessions = attendanceSessionRepository.findByClubIdWithAttendanceDetails(clubId);
+        int totalMembers = memberRepository.findAllByClubId(clubId).size();
+        
+        return sessions.stream()
+                .map(session -> {
+                    List<Attendance> attendanceList = session.getAttendanceList();
+                    int attendedMembers = attendanceList.size();
+                    double sessionAttendanceRate = totalMembers > 0 ? 
+                        (double) attendedMembers / totalMembers * 100 : 0.0;
+                    
+                    // 출석 상세 정보
+                    List<ClubDetailResponse.AttendanceDetailDto> attendanceDetails = 
+                        attendanceList.stream()
+                            .map(attendance -> ClubDetailResponse.AttendanceDetailDto.builder()
+                                    .userId(attendance.getUser().getUserId())
+                                    .userName(attendance.getUser().getName())
+                                    .attendanceTime(attendance.getAttendanceTime())
+                                    .status(attendance.getStatus().name())
+                                    .build())
+                            .collect(Collectors.toList());
+                    
+                    // 세션 날짜와 시간을 결합
+                    LocalDateTime sessionDateTime = LocalDateTime.of(
+                        session.getSessionDate(), 
+                        session.getStartTime()
+                    );
+                    
+                    return ClubDetailResponse.AttendanceSessionSummaryDto.builder()
+                            .sessionId(session.getId())
+                            .sessionName(session.getSessionName())
+                            .place(session.getPlace())
+                            .sessionDateTime(sessionDateTime)
+                            .totalMembers(totalMembers)
+                            .attendedMembers(attendedMembers)
+                            .attendanceRate(Math.round(sessionAttendanceRate * 100.0) / 100.0)
+                            .attendanceDetails(attendanceDetails)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * 사용자의 동아리 출석률 계산
+     */
+    private double calculateUserAttendanceRate(String userId, Long clubId) {
+        try {
+            // 해당 사용자가 참석한 세션 수 (PRESENT 상태만)
+            long attendedSessions = attendanceRepository.countAttendedSessionsByUserAndClub(
+                userId, clubId, AttendanceStatus.PRESENT);
+            
+            // 해당 사용자가 가입한 이후의 총 세션 수
+            long totalSessions = attendanceRepository.countTotalSessionsForUser(userId, clubId);
+            
+            if (totalSessions == 0) {
+                return 0.0;
+            }
+            
+            double rate = (double) attendedSessions / totalSessions * 100;
+            return Math.round(rate * 100.0) / 100.0;
+        } catch (Exception e) {
+            return 0.0;
+        }
     }
 }

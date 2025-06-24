@@ -25,4 +25,14 @@ public interface AttendanceSessionRepository extends JpaRepository<AttendanceSes
      * 동아리별 출석 세션 개수
      */
     long countByClubId(Long clubId);
+    
+    /**
+     * 특정 동아리의 출석 세션 목록 조회 (출석 정보 포함)
+     */
+    @Query("SELECT DISTINCT s FROM AttendanceSession s " +
+           "LEFT JOIN FETCH s.attendanceList a " +
+           "LEFT JOIN FETCH a.user " +
+           "WHERE s.club.id = :clubId " +
+           "ORDER BY s.sessionDate DESC, s.startTime DESC")
+    List<AttendanceSession> findByClubIdWithAttendanceDetails(@Param("clubId") Long clubId);
 }

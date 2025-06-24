@@ -6,6 +6,7 @@ import goormthon.hufs.chulcheck.domain.dto.request.CreateClubRequest;
 import goormthon.hufs.chulcheck.domain.dto.request.UpdateClubRequest;
 import goormthon.hufs.chulcheck.domain.dto.response.ClubMemberResponse;
 import goormthon.hufs.chulcheck.domain.dto.response.ClubResponse;
+import goormthon.hufs.chulcheck.domain.dto.response.ClubDetailResponse;
 import goormthon.hufs.chulcheck.domain.dto.response.GetClubInfoResponse;
 import goormthon.hufs.chulcheck.domain.entity.Club;
 import goormthon.hufs.chulcheck.domain.entity.ClubMember;
@@ -117,6 +118,25 @@ public class ClubController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "동아리 삭제 중 오류가 발생했습니다."));
+        }
+    }
+
+    /**
+     * 동아리 상세 정보 조회 (관리자용)
+     */
+    @GetMapping("/{clubId}/detail")
+    public ResponseEntity<?> getClubDetail(
+            @PathVariable Long clubId,
+            Authentication authentication) {
+        String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
+        try {
+            ClubDetailResponse response = clubService.getClubDetail(clubId, userId);
+            return ResponseEntity.ok(response);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "동아리 상세 정보 조회 중 오류가 발생했습니다."));
         }
     }
 }
