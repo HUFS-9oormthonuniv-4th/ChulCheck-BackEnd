@@ -32,7 +32,7 @@ public class AuthService {
         User user = User.builder()
                 .userId(request.getUserId())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .nickname(request.getNickname())
+                .nickname(request.getUserId())
                 .name(request.getName())
                 .school(request.getSchool())
                 .major(request.getMajor())

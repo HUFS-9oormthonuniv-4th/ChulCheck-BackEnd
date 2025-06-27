@@ -18,10 +18,6 @@ public class SignupRequest {
              message = "비밀번호는 영문자, 숫자, 특수문자를 포함해야 합니다.")
     private String password;
     
-    @NotBlank(message = "닉네임은 필수입니다.")
-    @Size(min = 2, max = 20, message = "닉네임은 2자 이상 20자 이하여야 합니다.")
-    private String nickname;
-    
     private String name;
     private String school;
     private String major;
