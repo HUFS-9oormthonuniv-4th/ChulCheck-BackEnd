@@ -73,6 +73,13 @@ public class ClubService {
         return clubRepository.findAll();
     }
 
+    public List<Club> searchClubs(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return clubRepository.findAll();
+        }
+        return clubRepository.findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(keyword.trim());
+    }
+
     @Transactional
     public Club updateClub(Long clubId, UpdateClubRequest req, String userId) {
         if (!isClubAdministrator(clubId, userId)) {

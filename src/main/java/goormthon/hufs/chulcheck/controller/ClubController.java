@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Club", description = "동아리 관리 API")
@@ -48,6 +49,27 @@ public class ClubController {
     public List<GetClubInfoResponse> getAllClubs(Authentication authentication) {
         String userId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
         return clubService.getClubsByUserId(userId);
+    }
+
+    @Operation(summary = "동아리 검색", description = "동아리 이름 또는 설명으로 동아리를 검색합니다. 검색어가 없으면 모든 동아리를 반환합니다.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "검색 성공"),
+        @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @GetMapping("/search")
+    public ResponseEntity<?> searchClubs(
+            @Parameter(description = "검색 키워드 (선택사항)") 
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        try {
+            List<Club> clubs = clubService.searchClubs(keyword);
+            List<ClubResponse> responses = clubs.stream()
+                    .map(ClubResponse::fromEntity)
+                    .collect(java.util.stream.Collectors.toList());
+            return ResponseEntity.ok(responses);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "동아리 검색 중 오류가 발생했습니다."));
+        }
     }
 
     @Operation(summary = "동아리 생성", description = "새로운 동아리를 생성합니다. 생성자는 자동으로 동아리의 소유자가 됩니다.")
