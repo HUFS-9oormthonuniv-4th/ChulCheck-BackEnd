@@ -65,9 +65,9 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         Cookie cookie = new Cookie(key, value);
         cookie.setMaxAge(tokenExpirationHours * 60 * 60); // 초 단위
         cookie.setPath("/");
-        cookie.setHttpOnly(true);
+        cookie.setHttpOnly(false);
         cookie.setSecure(true); // HTTPS에서만 전송
-        cookie.setAttribute("SameSite", "Lax"); // CSRF 공격 방지
+        cookie.setAttribute("SameSite", "None"); // CSRF 공격 방지
         return cookie;
     }
 }
