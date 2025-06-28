@@ -158,6 +158,31 @@ public class ClubService {
     }
 
     @Transactional
+    public ClubMember removeAdministrator(Long clubId, String targetUserId, String currentUserId) {
+        if (!isClubAdministrator(clubId, currentUserId)) {
+            throw new SecurityException("동아리 관리자만 다른 관리자의 권한을 제거할 수 있습니다.");
+        }
+
+        // 대상 멤버 조회
+        ClubMember targetMember = memberRepository.findByClubIdAndUserUserId(clubId, targetUserId)
+            .orElseThrow(() -> new EntityNotFoundException("해당 사용자를 찾을 수 없습니다: " + targetUserId));
+
+        // 대상이 관리자인지 확인
+        if (targetMember.getRole() != ClubRole.ROLE_MANAGER) {
+            throw new IllegalStateException("해당 사용자는 관리자가 아닙니다.");
+        }
+
+        // 자기 자신의 권한은 제거할 수 없음
+        if (currentUserId.equals(targetUserId)) {
+            throw new IllegalArgumentException("자신의 관리자 권한은 제거할 수 없습니다.");
+        }
+
+        // 관리자를 일반 멤버로 변경
+        targetMember.setRole(ClubRole.ROLE_MEMBER);
+        return memberRepository.save(targetMember);
+    }
+
+    @Transactional
     public void removeMember(Long clubId, String userId) {
         ClubMember member = memberRepository.findByClubIdAndUserUserId(clubId, userId)
             .orElseThrow(() -> new EntityNotFoundException("해당 User의 모임 가입정보를 찾을 수 없습니다: " + userId));

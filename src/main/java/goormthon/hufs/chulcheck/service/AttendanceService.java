@@ -162,6 +162,45 @@ public class AttendanceService {
     }
 
     /**
+     * 개별 사용자의 출석 상태 변경
+     * 관리자가 특정 사용자의 출석 상태를 수동으로 변경할 때 사용
+     */
+    @Transactional
+    public Attendance updateAttendanceStatus(Long attendanceId, String statusStr, String adminUserId) {
+        // 출석 기록 조회
+        Attendance attendance = attendanceRepository.findById(attendanceId)
+            .orElseThrow(() -> new EntityNotFoundException("출석 기록을 찾을 수 없습니다: " + attendanceId));
+        
+        // 상태 값 검증 및 변환
+        AttendanceStatus newStatus;
+        try {
+            newStatus = AttendanceStatus.valueOf(statusStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("올바르지 않은 출석 상태입니다. PRESENT, LATE, ABSENT 중 하나를 입력해주세요.");
+        }
+        
+        // 관리자 권한 확인
+        Long clubId = attendance.getAttendanceSession().getClub().getId();
+        ClubMember adminMember = clubMemberRepository.findByClubIdAndUserUserId(clubId, adminUserId)
+            .orElseThrow(() -> new SecurityException("해당 동아리에 속하지 않습니다."));
+        
+        if (adminMember.getRole() != ClubRole.ROLE_MANAGER) {
+            throw new SecurityException("동아리 관리자만 출석 상태를 변경할 수 있습니다.");
+        }
+        
+        // 출석 상태 변경
+        attendance.setStatus(newStatus);
+        attendance.setAttendanceTime(LocalDateTime.now());
+        
+        Attendance savedAttendance = attendanceRepository.save(attendance);
+        
+        log.info("출석 상태 변경 완료: attendanceId={}, newStatus={}, updatedBy={}", 
+                attendanceId, newStatus, adminUserId);
+        
+        return savedAttendance;
+    }
+
+    /**
      * 특정 세션의 모든 출석을 '출석'으로 일괄 변경
      * 관리자가 세션 종료 후 일괄 출석 처리할 때 사용
      */

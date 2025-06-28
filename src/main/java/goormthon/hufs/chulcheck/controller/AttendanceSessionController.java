@@ -24,6 +24,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Attendance Session", description = "출석 세션 관리 API")
+@CrossOrigin(origins = "*")
 public class AttendanceSessionController {
     
     private final AttendanceSessionService attendanceSessionService;

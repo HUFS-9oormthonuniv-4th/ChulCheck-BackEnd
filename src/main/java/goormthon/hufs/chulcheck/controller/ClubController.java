@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/clubs")
 @RestController
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*")
 public class ClubController {
     private final ClubService clubService;
 
@@ -136,6 +139,37 @@ public class ClubController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "관리자 추가 중 오류가 발생했습니다."));
+        }
+    }
+
+    @Operation(summary = "동아리 관리자 권한 삭제", description = "특정 동아리의 관리자 권한을 제거하여 일반 멤버로 변경합니다. (기존 관리자 권한 필요)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "관리자 권한 삭제 성공"),
+        @ApiResponse(responseCode = "403", description = "권한 없음"),
+        @ApiResponse(responseCode = "404", description = "관리자를 찾을 수 없음"),
+        @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @DeleteMapping("/{clubId}/administrators/{targetUserId}")
+    public ResponseEntity<?> removeClubAdministrator(
+            @Parameter(description = "동아리 ID") @PathVariable Long clubId,
+            @Parameter(description = "관리자 권한을 제거할 사용자 ID") @PathVariable String targetUserId,
+            Authentication authentication) {
+        String currentUserId = ((CustomOAuth2User) authentication.getPrincipal()).getUserId();
+
+        try {
+            ClubMember updatedMember = clubService.removeAdministrator(clubId, targetUserId, currentUserId);
+            ClubMemberResponse response = ClubMemberResponse.fromEntity(updatedMember);
+            return ResponseEntity.ok(Map.of(
+                "message", "관리자 권한이 제거되었습니다.",
+                "member", response
+            ));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "관리자 권한 삭제 중 오류가 발생했습니다."));
         }
     }
 

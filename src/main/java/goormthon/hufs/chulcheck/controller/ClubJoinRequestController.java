@@ -27,6 +27,7 @@ import java.util.Map;
 @RequestMapping("/api/v1/clubs")
 @RestController
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*")
 public class ClubJoinRequestController {
     
     private final ClubService clubService;

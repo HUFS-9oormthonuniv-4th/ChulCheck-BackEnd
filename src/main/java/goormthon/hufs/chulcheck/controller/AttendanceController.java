@@ -189,4 +189,39 @@ public class AttendanceController {
                     .body(Map.of("error", "출석 일괄 변경 중 오류가 발생했습니다."));
         }
     }
+
+    @PutMapping("/{attendanceId}/status")
+    @Operation(summary = "개별 출석 상태 변경", description = "관리자가 특정 사용자의 출석 상태를 변경합니다. (출석/지각/결석)")
+    public ResponseEntity<?> updateAttendanceStatus(@PathVariable Long attendanceId,
+                                                   @RequestParam String status,
+                                                   Authentication authentication) {
+        try {
+            CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+            String userId = customOAuth2User.getUserId();
+            
+            Attendance updatedAttendance = attendanceService.updateAttendanceStatus(attendanceId, status, userId);
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "출석 상태가 변경되었습니다.",
+                "attendanceId", updatedAttendance.getId(),
+                "newStatus", updatedAttendance.getStatus(),
+                "updatedTime", updatedAttendance.getAttendanceTime(),
+                "sessionName", updatedAttendance.getAttendanceSession().getSessionName(),
+                "userName", updatedAttendance.getUser().getName()
+            ));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("출석 상태 변경 중 오류 발생", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "출석 상태 변경 중 오류가 발생했습니다."));
+        }
+    }
 }

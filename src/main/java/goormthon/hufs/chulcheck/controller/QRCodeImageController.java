@@ -20,6 +20,7 @@ import java.util.Base64;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "QR Code Image", description = "QR 코드 이미지 직접 제공 API")
+@CrossOrigin(origins = "*")
 public class QRCodeImageController {
     
     private final AttendanceSessionService attendanceSessionService;
