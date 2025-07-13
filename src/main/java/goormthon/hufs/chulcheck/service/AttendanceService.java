@@ -32,6 +32,7 @@ public class AttendanceService {
     private final UserRepository userRepository;
     private final AttendanceSessionRepository attendanceSessionRepository;
     private final ClubMemberRepository clubMemberRepository;
+    private final AttendanceBadgeService attendanceBadgeService;
 
     /**
      * QR 코드 스캔을 통한 출석 체크
@@ -61,6 +62,9 @@ public class AttendanceService {
         Attendance savedAttendance = attendanceRepository.save(attendance);
         log.info("출석 체크 완료: userId={}, sessionId={}, status={}", 
                 userId, sessionId, savedAttendance.getStatus());
+        
+        // 뱃지 획득 조건 체크
+        attendanceBadgeService.onAttendanceRecord(user, savedAttendance.getStatus().toString());
         
         return savedAttendance;
     }
@@ -100,6 +104,9 @@ public class AttendanceService {
         Attendance savedAttendance = attendanceRepository.save(attendance);
         log.info("출석 코드로 출석 체크 완료: userId={}, code={}, status={}", 
                 userId, attendanceCode, savedAttendance.getStatus());
+        
+        // 뱃지 획득 조건 체크
+        attendanceBadgeService.onAttendanceRecord(user, savedAttendance.getStatus().toString());
         
         return savedAttendance;
     }

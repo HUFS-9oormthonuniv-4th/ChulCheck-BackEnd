@@ -47,6 +47,10 @@ dependencies {
     // QR code
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'com.google.zxing:javase:3.5.3'
+    
+    // AWS SES
+    implementation 'software.amazon.awssdk:ses:2.27.21'
+    implementation 'software.amazon.awssdk:auth:2.27.21'
 }
 
 tasks.named('test') {

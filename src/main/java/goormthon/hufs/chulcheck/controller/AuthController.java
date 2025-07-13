@@ -3,7 +3,11 @@ package goormthon.hufs.chulcheck.controller;
 import goormthon.hufs.chulcheck.domain.dto.LoginRequest;
 import goormthon.hufs.chulcheck.domain.dto.LoginResponse;
 import goormthon.hufs.chulcheck.domain.dto.SignupRequest;
+import goormthon.hufs.chulcheck.domain.dto.request.PasswordResetRequest;
+import goormthon.hufs.chulcheck.domain.dto.request.PasswordResetConfirmRequest;
+import goormthon.hufs.chulcheck.domain.dto.response.ApiResponse;
 import goormthon.hufs.chulcheck.service.AuthService;
+import goormthon.hufs.chulcheck.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
@@ -26,6 +30,7 @@ import java.util.Map;
 public class AuthController {
     
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
     
     @PostMapping("/signup")
     @Operation(summary = "회원가입", description = "새로운 사용자를 등록합니다.")
@@ -94,6 +99,74 @@ public class AuthController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("valid", false, "message", "토큰 검증 중 오류가 발생했습니다."));
+        }
+    }
+    
+    @PostMapping("/password-reset/request")
+    @Operation(summary = "비밀번호 재설정 요청", description = "이메일로 비밀번호 재설정 토큰을 발송합니다.")
+    public ResponseEntity<ApiResponse<Void>> requestPasswordReset(@Valid @RequestBody PasswordResetRequest request) {
+        try {
+            passwordResetService.createPasswordResetToken(request.getEmail());
+            
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(200)
+                .message("비밀번호 재설정 이메일이 발송되었습니다")
+                .data(null)
+                .build();
+                
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(400)
+                .message(e.getMessage())
+                .data(null)
+                .build();
+                
+            return ResponseEntity.badRequest().body(response);
+        } catch (Exception e) {
+            log.error("비밀번호 재설정 요청 중 오류 발생", e);
+            
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(500)
+                .message("비밀번호 재설정 요청 처리 중 오류가 발생했습니다")
+                .data(null)
+                .build();
+                
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    @PostMapping("/password-reset/confirm")
+    @Operation(summary = "비밀번호 재설정", description = "토큰을 사용하여 새로운 비밀번호로 변경합니다.")
+    public ResponseEntity<ApiResponse<Void>> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+        try {
+            passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
+            
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(200)
+                .message("비밀번호가 성공적으로 변경되었습니다")
+                .data(null)
+                .build();
+                
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(400)
+                .message(e.getMessage())
+                .data(null)
+                .build();
+                
+            return ResponseEntity.badRequest().body(response);
+        } catch (Exception e) {
+            log.error("비밀번호 재설정 중 오류 발생", e);
+            
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(500)
+                .message("비밀번호 재설정 처리 중 오류가 발생했습니다")
+                .data(null)
+                .build();
+                
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
     
