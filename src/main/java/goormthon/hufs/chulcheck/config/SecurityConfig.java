@@ -80,7 +80,7 @@ public class SecurityConfig {
         // 환경별로 설정된 origin만 허용
         String[] allowedOrigins = allowedOriginsString.split(",");
         configuration.setAllowedOriginPatterns(Arrays.asList(allowedOrigins));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
         
