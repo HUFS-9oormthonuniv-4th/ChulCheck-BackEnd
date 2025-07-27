@@ -28,6 +28,7 @@ jobs:
           echo "${{ secrets.APPLICATION_MYSQL_YML }}"   > src/main/resources/application-mysql.yml
           echo "${{ secrets.APPLICATION_OAUTH_YML }}"   > src/main/resources/application-oauth.yml
           echo "${{ secrets.APPLICATION_SWAGGER_YML }}" > src/main/resources/application-swagger.yml
+          echo "${{ secrets.APPLICATION_SES_YML }}" > src/main/resources/application-ses.yml
 
       - name: Gradle Wrapper 실행 권한 부여
         run: chmod +x ./gradlew
