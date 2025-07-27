@@ -191,8 +191,8 @@ public class AttendanceService {
         ClubMember adminMember = clubMemberRepository.findByClubIdAndUserUserId(clubId, adminUserId)
             .orElseThrow(() -> new SecurityException("해당 동아리에 속하지 않습니다."));
         
-        if (adminMember.getRole() != ClubRole.ROLE_MANAGER) {
-            throw new SecurityException("동아리 관리자만 출석 상태를 변경할 수 있습니다.");
+        if (adminMember.getRole() != ClubRole.ROLE_MANAGER && adminMember.getRole() != ClubRole.ROLE_OWNER) {
+            throw new SecurityException("동아리 소유자나 관리자만 출석 상태를 변경할 수 있습니다.");
         }
         
         // 출석 상태 변경
@@ -221,8 +221,8 @@ public class AttendanceService {
         ClubMember member = clubMemberRepository.findByClubIdAndUserUserId(session.getClub().getId(), userId)
             .orElseThrow(() -> new SecurityException("해당 동아리에 속하지 않습니다."));
         
-        if (member.getRole() != ClubRole.ROLE_MANAGER) {
-            throw new SecurityException("동아리 관리자만 출석을 일괄 변경할 수 있습니다.");
+        if (member.getRole() != ClubRole.ROLE_MANAGER && member.getRole() != ClubRole.ROLE_OWNER) {
+            throw new SecurityException("동아리 소유자나 관리자만 출석을 일괄 변경할 수 있습니다.");
         }
         
         // 해당 세션의 모든 출석 기록 조회
@@ -260,8 +260,8 @@ public class AttendanceService {
         ClubMember member = clubMemberRepository.findByClubIdAndUserUserId(session.getClub().getId(), userId)
             .orElseThrow(() -> new SecurityException("해당 동아리에 속하지 않습니다."));
         
-        if (member.getRole() != ClubRole.ROLE_MANAGER) {
-            throw new SecurityException("동아리 관리자만 출석을 일괄 변경할 수 있습니다.");
+        if (member.getRole() != ClubRole.ROLE_MANAGER && member.getRole() != ClubRole.ROLE_OWNER) {
+            throw new SecurityException("동아리 소유자나 관리자만 출석을 일괄 변경할 수 있습니다.");
         }
         
         // 해당 세션의 모든 출석 기록 조회
@@ -309,5 +309,69 @@ public class AttendanceService {
         
         attendance.setStatus(status);
         attendance.setAttendanceTime(now);
+    }
+
+    /**
+     * 관리자가 특정 사용자의 출석 기록 조회
+     */
+    public List<GetAttendanceResponse> getUserAttendancesByAdmin(String targetUserId, Long clubId, String adminUserId) {
+        // 관리자 권한 확인
+        ClubMember adminMember = clubMemberRepository.findByClubIdAndUserUserId(clubId, adminUserId)
+            .orElseThrow(() -> new SecurityException("해당 동아리에 속하지 않습니다."));
+        
+        if (adminMember.getRole() != ClubRole.ROLE_MANAGER && adminMember.getRole() != ClubRole.ROLE_OWNER) {
+            throw new SecurityException("동아리 소유자나 관리자만 다른 사용자의 출석 기록을 조회할 수 있습니다.");
+        }
+        
+        // 대상 사용자 확인
+        User targetUser = userRepository.findByUserId(targetUserId);
+        if (targetUser == null) {
+            throw new EntityNotFoundException("사용자를 찾을 수 없습니다: " + targetUserId);
+        }
+        
+        // 대상 사용자가 해당 동아리 멤버인지 확인
+        ClubMember targetMember = clubMemberRepository.findByClubIdAndUserUserId(clubId, targetUserId)
+            .orElseThrow(() -> new EntityNotFoundException("해당 사용자는 이 동아리의 멤버가 아닙니다."));
+        
+        List<Attendance> attendances = attendanceRepository.findAllByUserUserIdAndAttendanceSessionClubId(targetUserId, clubId);
+        return GetAttendanceResponse.fromEntity(attendances);
+    }
+
+    /**
+     * 관리자가 특정 사용자의 출석 통계 조회
+     */
+    public GetAttendanceStatsResponse getUserAttendanceStatsByAdmin(String targetUserId, Long clubId, String adminUserId) {
+        // 관리자 권한 확인
+        ClubMember adminMember = clubMemberRepository.findByClubIdAndUserUserId(clubId, adminUserId)
+            .orElseThrow(() -> new SecurityException("해당 동아리에 속하지 않습니다."));
+        
+        if (adminMember.getRole() != ClubRole.ROLE_MANAGER && adminMember.getRole() != ClubRole.ROLE_OWNER) {
+            throw new SecurityException("동아리 소유자나 관리자만 다른 사용자의 출석 통계를 조회할 수 있습니다.");
+        }
+        
+        // 대상 사용자 확인
+        User targetUser = userRepository.findByUserId(targetUserId);
+        if (targetUser == null) {
+            throw new EntityNotFoundException("사용자를 찾을 수 없습니다: " + targetUserId);
+        }
+        
+        // 대상 사용자가 해당 동아리 멤버인지 확인
+        ClubMember targetMember = clubMemberRepository.findByClubIdAndUserUserId(clubId, targetUserId)
+            .orElseThrow(() -> new EntityNotFoundException("해당 사용자는 이 동아리의 멤버가 아닙니다."));
+
+        List<Attendance> attendances = attendanceRepository.findAllByUserUserIdAndAttendanceSessionClubId(targetUserId, clubId);
+
+        long total = attendances.size();
+        long present = attendances.stream()
+                .filter(a -> a.getStatus() == AttendanceStatus.PRESENT)
+                .count();
+        long late = attendances.stream()
+                .filter(a -> a.getStatus() == AttendanceStatus.LATE)
+                .count();
+        long absent = attendances.stream()
+                .filter(a -> a.getStatus() == AttendanceStatus.ABSENT)
+                .count();
+
+        return new GetAttendanceStatsResponse(total, present, late, absent);
     }
 }

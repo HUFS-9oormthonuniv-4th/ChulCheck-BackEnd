@@ -224,4 +224,65 @@ public class AttendanceController {
                     .body(Map.of("error", "출석 상태 변경 중 오류가 발생했습니다."));
         }
     }
+
+    @GetMapping("/users/{targetUserId}")
+    @Operation(summary = "특정 사용자의 출석 기록 조회 (관리자용)", 
+               description = "관리자가 특정 동아리 멤버의 모든 출석 기록을 조회합니다.")
+    public ResponseEntity<?> getUserAttendances(
+            @PathVariable String targetUserId,
+            @RequestParam Long clubId,
+            Authentication authentication) {
+        try {
+            CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+            String adminUserId = customOAuth2User.getUserId();
+            
+            List<GetAttendanceResponse> attendances = 
+                attendanceService.getUserAttendancesByAdmin(targetUserId, clubId, adminUserId);
+            
+            return ResponseEntity.ok(Map.of(
+                "targetUserId", targetUserId,
+                "clubId", clubId,
+                "attendances", attendances,
+                "totalCount", attendances.size()
+            ));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("사용자 출석 기록 조회 중 오류 발생", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "출석 기록 조회 중 오류가 발생했습니다."));
+        }
+    }
+
+    @GetMapping("/users/{targetUserId}/stats")
+    @Operation(summary = "특정 사용자의 출석 통계 조회 (관리자용)", 
+               description = "관리자가 특정 동아리 멤버의 출석 통계를 조회합니다.")
+    public ResponseEntity<?> getUserAttendanceStats(
+            @PathVariable String targetUserId,
+            @RequestParam Long clubId,
+            Authentication authentication) {
+        try {
+            CustomOAuth2User customOAuth2User = (CustomOAuth2User)authentication.getPrincipal();
+            String adminUserId = customOAuth2User.getUserId();
+            
+            GetAttendanceStatsResponse stats = 
+                attendanceService.getUserAttendanceStatsByAdmin(targetUserId, clubId, adminUserId);
+            
+            return ResponseEntity.ok(stats);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("사용자 출석 통계 조회 중 오류 발생", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "출석 통계 조회 중 오류가 발생했습니다."));
+        }
+    }
 }

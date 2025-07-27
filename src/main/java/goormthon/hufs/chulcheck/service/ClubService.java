@@ -54,13 +54,13 @@ public class ClubService {
             .build();
         Club saved = clubRepository.save(club);
 
-        ClubMember adminMember = ClubMember.builder()
+        ClubMember ownerMember = ClubMember.builder()
             .club(saved)
             .user(creator)
-            .role(ClubRole.ROLE_MANAGER)
+            .role(ClubRole.ROLE_OWNER)
             .status(ClubStatus.ACTIVE)
             .build();
-        memberRepository.save(adminMember);
+        memberRepository.save(ownerMember);
         return saved;
     }
 
@@ -82,8 +82,8 @@ public class ClubService {
 
     @Transactional
     public Club updateClub(Long clubId, UpdateClubRequest req, String userId) {
-        if (!isClubAdministrator(clubId, userId)) {
-            throw new SecurityException("Only administrators can update clubs");
+        if (!isClubOwnerOrAdministrator(clubId, userId)) {
+            throw new SecurityException("Only club owner or administrators can update clubs");
         }
 
         Club club = getClub(clubId);
@@ -96,8 +96,8 @@ public class ClubService {
 
     @Transactional
     public void deleteClub(Long clubId, String userId) {
-        if (!isClubAdministrator(clubId, userId)) {
-            throw new SecurityException("Only administrators can delete clubs");
+        if (!isClubOwnerOrAdministrator(clubId, userId)) {
+            throw new SecurityException("Only club owner or administrators can delete clubs");
         }
 
         if (!clubRepository.existsById(clubId)) {
@@ -133,8 +133,8 @@ public class ClubService {
 
     @Transactional
     public ClubMember addAdministrator(Long clubId, String newAdminUserId, String currentUserId) {
-        if (!isClubAdministrator(clubId, currentUserId)) {
-            throw new SecurityException("Only administrators can add new administrators");
+        if (!isClubOwnerOrAdministrator(clubId, currentUserId)) {
+            throw new SecurityException("Only club owner or administrators can add new administrators");
         }
 
         Club club = getClub(clubId);
@@ -159,8 +159,8 @@ public class ClubService {
 
     @Transactional
     public ClubMember removeAdministrator(Long clubId, String targetUserId, String currentUserId) {
-        if (!isClubAdministrator(clubId, currentUserId)) {
-            throw new SecurityException("동아리 관리자만 다른 관리자의 권한을 제거할 수 있습니다.");
+        if (!isClubOwnerOrAdministrator(clubId, currentUserId)) {
+            throw new SecurityException("동아리 소유자나 관리자만 다른 관리자의 권한을 제거할 수 있습니다.");
         }
 
         // 대상 멤버 조회
@@ -170,6 +170,11 @@ public class ClubService {
         // 대상이 관리자인지 확인
         if (targetMember.getRole() != ClubRole.ROLE_MANAGER) {
             throw new IllegalStateException("해당 사용자는 관리자가 아닙니다.");
+        }
+
+        // 소유자의 권한은 제거할 수 없음
+        if (targetMember.getRole() == ClubRole.ROLE_OWNER) {
+            throw new IllegalArgumentException("동아리 소유자의 권한은 제거할 수 없습니다.");
         }
 
         // 자기 자신의 권한은 제거할 수 없음
@@ -196,7 +201,7 @@ public class ClubService {
 
     public List<ClubMember> getAdministrators(Long clubId) {
         getClub(clubId);
-        return memberRepository.findAllByClubIdAndRole(clubId, ClubRole.ROLE_MANAGER);
+        return memberRepository.findAllByClubIdAndRoleIn(clubId, List.of(ClubRole.ROLE_OWNER, ClubRole.ROLE_MANAGER));
     }
 
     public List<GetClubInfoResponse> getClubsByUserId(String userId) {
@@ -225,6 +230,15 @@ public class ClubService {
     public boolean isClubAdministrator(Long clubId, String userId) {
         Optional<ClubMember> member = memberRepository.findByClubIdAndUserUserId(clubId, userId);
         return member.isPresent() && member.get().getRole() == ClubRole.ROLE_MANAGER;
+    }
+
+    public boolean isClubOwnerOrAdministrator(Long clubId, String userId) {
+        Optional<ClubMember> member = memberRepository.findByClubIdAndUserUserId(clubId, userId);
+        if (member.isEmpty()) {
+            return false;
+        }
+        ClubRole role = member.get().getRole();
+        return role == ClubRole.ROLE_OWNER || role == ClubRole.ROLE_MANAGER;
     }
 
     // ===== 가입 요청 관련 메소드들 =====
@@ -260,8 +274,8 @@ public class ClubService {
      * 동아리의 가입 요청 목록 조회 (관리자용)
      */
     public List<ClubJoinRequest> getJoinRequests(Long clubId, String adminUserId) {
-        if (!isClubAdministrator(clubId, adminUserId)) {
-            throw new SecurityException("동아리 관리자만 가입 요청을 조회할 수 있습니다.");
+        if (!isClubOwnerOrAdministrator(clubId, adminUserId)) {
+            throw new SecurityException("동아리 소유자나 관리자만 가입 요청을 조회할 수 있습니다.");
         }
         
         Club club = getClub(clubId);
@@ -272,8 +286,8 @@ public class ClubService {
      * 대기중인 가입 요청만 조회 (관리자용)
      */
     public List<ClubJoinRequest> getPendingJoinRequests(Long clubId, String adminUserId) {
-        if (!isClubAdministrator(clubId, adminUserId)) {
-            throw new SecurityException("동아리 관리자만 가입 요청을 조회할 수 있습니다.");
+        if (!isClubOwnerOrAdministrator(clubId, adminUserId)) {
+            throw new SecurityException("동아리 소유자나 관리자만 가입 요청을 조회할 수 있습니다.");
         }
         
         Club club = getClub(clubId);
@@ -296,8 +310,8 @@ public class ClubService {
         ClubJoinRequest joinRequest = joinRequestRepository.findById(requestId)
                 .orElseThrow(() -> new EntityNotFoundException("가입 요청을 찾을 수 없습니다."));
         
-        if (!isClubAdministrator(joinRequest.getClub().getId(), adminUserId)) {
-            throw new SecurityException("동아리 관리자만 가입 요청을 처리할 수 있습니다.");
+        if (!isClubOwnerOrAdministrator(joinRequest.getClub().getId(), adminUserId)) {
+            throw new SecurityException("동아리 소유자나 관리자만 가입 요청을 처리할 수 있습니다.");
         }
         
         if (joinRequest.getStatus() != ClubStatus.PENDING) {
@@ -334,8 +348,8 @@ public class ClubService {
         ClubJoinRequest joinRequest = joinRequestRepository.findById(requestId)
                 .orElseThrow(() -> new EntityNotFoundException("가입 요청을 찾을 수 없습니다."));
         
-        if (!isClubAdministrator(joinRequest.getClub().getId(), adminUserId)) {
-            throw new SecurityException("동아리 관리자만 가입 요청을 처리할 수 있습니다.");
+        if (!isClubOwnerOrAdministrator(joinRequest.getClub().getId(), adminUserId)) {
+            throw new SecurityException("동아리 소유자나 관리자만 가입 요청을 처리할 수 있습니다.");
         }
         
         if (joinRequest.getStatus() != ClubStatus.PENDING) {
@@ -378,8 +392,8 @@ public class ClubService {
      * 동아리 상세 정보 조회 (관리자용)
      */
     public ClubDetailResponse getClubDetail(Long clubId, String userId) {
-        if (!isClubAdministrator(clubId, userId)) {
-            throw new SecurityException("동아리 관리자만 상세 정보를 조회할 수 있습니다.");
+        if (!isClubOwnerOrAdministrator(clubId, userId)) {
+            throw new SecurityException("동아리 소유자나 관리자만 상세 정보를 조회할 수 있습니다.");
         }
         
         Club club = getClub(clubId);
